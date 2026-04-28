@@ -36,20 +36,34 @@ val run :
   proc_mgr:_ Eio.Process.mgr ->
   fs:Eio.Fs.dir_ty Eio.Path.t ->
   d10:D10.Config.t ->
-  env:string array ->
+  ?toolchain:Solver.Ctx.toolchain ->
+  dune_cache_root:string ->
   bin_paths:bin_paths ->
+  context_layers:string list ->
   driver_layer_hashes:string list ->
   odoc_layer_hashes:string list ->
   Doc_plan.node ->
   unit
 (** [run … node] builds a single doc layer (cache hit short-circuits).
 
+    [context_layers] is the project's full transitive build-layer
+    closure (e.g. what {!Pipeline.build} returns). Every documentable
+    package's prefix needs the {b whole switch} populated, not just
+    its own build layer + day11-style compile-side dep layers, because
+    [odoc_driver_voodoo] does both compile and link in one
+    invocation and scans the assembled prefix's [lib/] for every
+    dep's [.cmt] / [.cmti] / [META].
+
     Steps:
     + If [D10.Layer.succeeded d10 ~hash:node.hash] — no-op.
-    + Otherwise: compose the layer-hash list to assemble — the
-      package's build layer, [node.doc_dep_hashes], and both tool
-      layer sets — and call [D10.Prefix.assemble_cached] to materialise
-      a working prefix.
+    + Otherwise: assemble [<context_layers> @ <driver_layer_hashes> @
+      <odoc_layer_hashes>] via [D10.Prefix.assemble_cached] to
+      materialise a working prefix.
+    + Build env via [Solver.Env.make_env ?toolchain ~prefix
+      ~dune_cache_root] using the {b assembled prefix} so
+      [OPAM_SWITCH_PREFIX] / [OCAMLPATH] / [PATH] match the cwd in
+      which [odoc-driver-voodoo] is about to run. Mismatch here makes
+      the tool exit silently with code 1.
     + Snapshot the prefix, spawn [odoc-driver-voodoo] with [--html-dir
       <prefix>/odoc_docs] and [--actions] derived from [node.kind].
     + Diff yields the new files; [D10.Layer.store] commits them at

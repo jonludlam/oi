@@ -20,8 +20,10 @@ val run :
   proc_mgr:_ Eio.Process.mgr ->
   fs:Eio.Fs.dir_ty Eio.Path.t ->
   d10:D10.Config.t ->
-  env:string array ->
+  ?toolchain:Solver.Ctx.toolchain ->
+  dune_cache_root:string ->
   bin_paths:Doc_build.bin_paths ->
+  context_layers:string list ->
   driver_layer_hashes:string list ->
   odoc_layer_hashes:string list ->
   Doc_plan.t ->

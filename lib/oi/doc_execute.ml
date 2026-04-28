@@ -35,8 +35,8 @@ let first_missing ~d10 ~driver_layer_hashes ~odoc_layer_hashes
   in
   List.find_opt (fun h -> not (D10.Layer.succeeded d10 ~hash:h)) candidates
 
-let run ~proc_mgr ~fs ~d10 ~env ~bin_paths
-    ~driver_layer_hashes ~odoc_layer_hashes plan =
+let run ~proc_mgr ~fs ~d10 ?toolchain ~dune_cache_root ~bin_paths
+    ~context_layers ~driver_layer_hashes ~odoc_layer_hashes plan =
   let outcomes = ref [] in
   let push o = outcomes := o :: !outcomes in
   List.iter
@@ -61,7 +61,8 @@ let run ~proc_mgr ~fs ~d10 ~env ~bin_paths
           push (Cascaded { node; missing_dep })
         | None ->
           (try
-            Doc_build.run ~proc_mgr ~fs ~d10 ~env ~bin_paths
+            Doc_build.run ~proc_mgr ~fs ~d10 ?toolchain ~dune_cache_root
+              ~bin_paths ~context_layers
               ~driver_layer_hashes ~odoc_layer_hashes node;
             push (Built node)
           with

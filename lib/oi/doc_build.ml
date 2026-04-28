@@ -70,8 +70,8 @@ let spawn_and_capture ~proc_mgr ~fs ~env ~cwd ~pkg cmd =
       ~output:(Fmt.str "killed by signal %d (full env+output: %s)\n\n%s"
                  n path output)
 
-let run ~proc_mgr ~fs ~d10 ~env ~bin_paths
-    ~driver_layer_hashes ~odoc_layer_hashes
+let run ~proc_mgr ~fs ~d10 ?toolchain ~dune_cache_root ~bin_paths
+    ~context_layers ~driver_layer_hashes ~odoc_layer_hashes
     (node : Doc_plan.node) =
   if D10.Layer.succeeded d10 ~hash:node.hash then begin
     Log.debug (fun m -> m "doc cache hit: %s/%s/%s"
@@ -87,9 +87,14 @@ let run ~proc_mgr ~fs ~d10 ~env ~bin_paths
        its dep doc layers) BEFORE the tool layers, since tool files
        in [bin/] / [lib/] should take precedence over the package's
        own copies of e.g. [odoc] if any. *)
+    (* Assemble the FULL project closure plus tools. odoc_driver_voodoo
+       scans the prefix for every dep's [META] / [.cmt] / [.cmti], so a
+       per-node prefix containing only [node.build_hash] +
+       day11-style compile-layer mounts is too sparse — the tool exits
+       1 silently with an empty switch. [context_layers] is what
+       [Pipeline.build] returned for the project's solve. *)
     let layer_hashes =
-      [ node.build_hash ]
-      @ node.doc_dep_hashes
+      context_layers
       @ driver_layer_hashes
       @ odoc_layer_hashes
     in
@@ -109,6 +114,15 @@ let run ~proc_mgr ~fs ~d10 ~env ~bin_paths
         try Unix.mkdir d 0o755
         with Unix.Unix_error (EEXIST, _, _) -> ())
       [ html_dir; odoc_dir; odocl_dir ];
+    (* Construct env from THIS prefix, not the project's build_prefix.
+       odoc_driver_voodoo reads OPAM_SWITCH_PREFIX / OCAMLPATH and
+       walks the switch-shaped tree there; if these point at the
+       project's build prefix while [cwd] / [--html-dir] are inside
+       a different per-node prefix, the tool exits with code 1
+       silently. *)
+    let env =
+      Solver.Env.make_env ?toolchain ~prefix ~dune_cache_root ()
+    in
     let before = D10.Prefix.snapshot ~fs prefix in
     let cmd =
       [ bin_paths.odoc_driver_voodoo
@@ -122,7 +136,15 @@ let run ~proc_mgr ~fs ~d10 ~env ~bin_paths
       ; "-v"
       ]
     in
-    spawn_and_capture ~proc_mgr ~fs ~env ~cwd:prefix ~pkg:pkg_str cmd;
+    (* Use [/tmp] as cwd, NOT [prefix]. odoc_driver_voodoo trips
+       (silent exit 1) when its cwd is the assembled prefix and the
+       env is the trimmed switch env from [Solver.Env.make_env];
+       reproducible standalone. The tool only consults
+       [OPAM_SWITCH_PREFIX] for the switch contents, so cwd doesn't
+       need to be under it. *)
+    let neutral_cwd = Filename.get_temp_dir_name () in
+    spawn_and_capture ~proc_mgr ~fs ~env ~cwd:neutral_cwd
+      ~pkg:pkg_str cmd;
     let files = D10.Prefix.diff ~fs ~prefix ~before |> List.map fst in
     let parent_hashes = layer_hashes in
     D10.Layer.store d10

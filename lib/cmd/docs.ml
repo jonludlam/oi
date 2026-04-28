@@ -53,7 +53,7 @@ let do_docs ?refresh ~proc_mgr ~fs ~clock ~sys ~platform ~os_key ~cache
   in
   let constraints = OpamPackage.Name.Map.empty in
   Fmt.pr "Building project deps...@.";
-  let _layer_hashes =
+  let project_layer_hashes =
     Oi.Pipeline.build ~sys ~proc_mgr ~fs ~clock ~cache ~data_dir ~conf ~os_key
       ~pins:project.pins ~constraints ?refresh ?toolchain names
   in
@@ -96,12 +96,11 @@ let do_docs ?refresh ~proc_mgr ~fs ~clock ~sys ~platform ~os_key ~cache
   end
   else begin
     let dune_cache_root = data_dir / "dune-cache" in
-    let env =
-      Oi.Solver.Env.make_env ?toolchain:tc_ctx ~prefix ~dune_cache_root ()
-    in
     let outcomes =
-      Oi.Doc_execute.run ~proc_mgr ~fs ~d10 ~env
+      Oi.Doc_execute.run ~proc_mgr ~fs ~d10 ?toolchain:tc_ctx
+        ~dune_cache_root
         ~bin_paths:hardcoded_bin_paths
+        ~context_layers:project_layer_hashes
         ~driver_layer_hashes:[] ~odoc_layer_hashes:[]
         doc_plan
     in
