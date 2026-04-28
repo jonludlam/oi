@@ -104,9 +104,12 @@ let build ~tool_hash plan =
               ([ "link"; "v2"; compile_hash; tool_hash ]
               @ link_dep_hashes)
           in
+          (* link_dep_hashes already covers doc-deps' compile-side
+             layers; the package's OWN compile layer must also be
+             mounted so the linker can find its own .odoc files. *)
           let link_node =
             { pkg; kind = Link; hash = link_hash; build_hash;
-              doc_dep_hashes = link_dep_hashes }
+              doc_dep_hashes = compile_hash :: link_dep_hashes }
           in
           Hashtbl.replace compile_side pkg_name compile_node;
           Hashtbl.replace by_pkg pkg_name [ compile_node; link_node ];
