@@ -253,8 +253,24 @@ val dep_names :
   OpamPackage.t ->
   OpamPackage.Name.Set.t ->
   OpamPackage.Name.Set.t
-(** Direct dep names of [pkg] that appear in [in_solution], filtered by the
-    platform variables in [conf]. *)
+(** Direct {b build}-deps of [pkg] that appear in [in_solution], filtered by
+    the platform variables in [conf]. Drops [{with-doc}] and [{post}]
+    formulas; ignores [x-extra-doc-deps]. *)
+
+val doc_dep_names :
+  packages_dirs:string list ->
+  conf:Ctx.conf ->
+  OpamPackage.t ->
+  OpamPackage.Name.Set.t ->
+  OpamPackage.Name.Set.t
+(** Direct {b doc}-deps of [pkg]. Like {!dep_names} but evaluates
+    [{with-doc}] and [{post}] filters as [true] and unions in the package's
+    [x-extra-doc-deps] (intersected with [in_solution]).
+
+    A superset of {!dep_names}; equal when the package has no
+    [{with-doc}] / [{post}] / [x-extra-doc-deps] additions, in which case
+    {!Doc_deps.needs_separate_link} returns [false] and the doc DAG can
+    collapse the package's compile + link stages into a single doc-all run. *)
 
 val load_opam : string list -> OpamPackage.t -> OpamFile.OPAM.t option
 (** Search [packages_dirs] in order for the opam file of [pkg]. *)

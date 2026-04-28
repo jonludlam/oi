@@ -875,7 +875,8 @@ let ctx_env ctx = std_env (Ctx.conf ctx)
 let filter_env (conf : Ctx.conf) v =
   std_env conf (OpamVariable.Full.to_string v)
 
-let dep_names ~packages_dirs ~(conf : Ctx.conf) pkg in_solution =
+let dep_names_with ~packages_dirs ~(conf : Ctx.conf) ~post ~doc ~extra_doc
+    pkg in_solution =
   let env v =
     if List.mem v OpamPackageVar.predefined_depends_variables then None
     else
@@ -901,7 +902,7 @@ let dep_names ~packages_dirs ~(conf : Ctx.conf) pkg in_solution =
       let deps =
         OpamFile.OPAM.depends opam
         |> OpamFilter.partial_filter_formula env
-        |> OpamFilter.filter_deps ~build:true ~post:false ~test:false ~doc:false
+        |> OpamFilter.filter_deps ~build:true ~post ~test:false ~doc
              ~dev_setup:false ~dev:false ~default:false
         |> names_from_formula
       in
@@ -914,7 +915,26 @@ let dep_names ~packages_dirs ~(conf : Ctx.conf) pkg in_solution =
           OpamPackage.Name.Set.empty
           (OpamFile.OPAM.depopts opam)
       in
-      OpamPackage.Name.Set.union deps depopts
+      let extra =
+        if extra_doc then
+          OpamPackage.Name.Set.inter (Doc_deps.get_extra_doc_deps opam)
+            in_solution
+        else OpamPackage.Name.Set.empty
+      in
+      OpamPackage.Name.Set.union (OpamPackage.Name.Set.union deps depopts) extra
+
+(* Existing build-deps view: with-doc=false, post=false, no x-extra-doc-deps.
+   Hashes computed off this view stay identical to the pre-doc-feature world. *)
+let dep_names ~packages_dirs ~conf pkg in_solution =
+  dep_names_with ~packages_dirs ~conf ~post:false ~doc:false ~extra_doc:false
+    pkg in_solution
+
+(* Doc-deps view: with-doc=true, post=true, plus x-extra-doc-deps. Used by
+   the doc DAG to decide [needs_separate_link] and to wire link-stage lower
+   mounts. *)
+let doc_dep_names ~packages_dirs ~conf pkg in_solution =
+  dep_names_with ~packages_dirs ~conf ~post:true ~doc:true ~extra_doc:true
+    pkg in_solution
 
 let topo_sort ~packages_dirs ~conf pkgs =
   let in_solution =

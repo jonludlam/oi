@@ -17,6 +17,7 @@ type node = {
   opam : OpamFile.OPAM.t;
   method_ : method_;
   deps : OpamPackage.Name.t list;
+  doc_deps : OpamPackage.Name.t list;
   layer_hash : string;
 }
 
@@ -44,6 +45,14 @@ let build ctx ?d10 ~packages_dirs pkgs =
         in
         let deps =
           dep_set |> OpamPackage.Name.Set.elements
+          |> List.filter (fun n -> OpamPackage.Name.Set.mem n in_solution)
+        in
+        let doc_dep_set =
+          Solver.doc_dep_names ~packages_dirs ~conf:(Solver.Ctx.conf ctx) pkg
+            in_solution
+        in
+        let doc_deps =
+          doc_dep_set |> OpamPackage.Name.Set.elements
           |> List.filter (fun n -> OpamPackage.Name.Set.mem n in_solution)
         in
         let opam =
@@ -135,7 +144,7 @@ let build ctx ?d10 ~packages_dirs pkgs =
             m "Plan %s: deps=[%s]"
               (OpamPackage.to_string pkg)
               (String.concat ", " (List.map OpamPackage.Name.to_string deps)));
-        let node = { pkg; opam; method_; deps; layer_hash } in
+        let node = { pkg; opam; method_; deps; doc_deps; layer_hash } in
         let installed = OpamPackage.Name.Set.add name installed in
         (installed, OpamPackage.Name.Map.add name node nodes, order @ [ name ]))
       (OpamPackage.Name.Set.empty, OpamPackage.Name.Map.empty, [])

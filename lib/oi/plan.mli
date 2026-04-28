@@ -35,7 +35,16 @@ type node = {
   opam : OpamFile.OPAM.t;
   method_ : method_;
   deps : OpamPackage.Name.t list;
-      (** Direct dependencies within the plan (determines execution order). *)
+      (** Direct {b build}-dependencies within the plan (determines execution
+          order). [{with-doc}] / [{post}] / [x-extra-doc-deps] are excluded —
+          {!layer_hash} is derived from this view, so adding documentation
+          does not invalidate the build-layer cache. *)
+  doc_deps : OpamPackage.Name.t list;
+      (** Direct {b doc}-dependencies: {!deps} unioned with the package's
+          [{with-doc}], [{post}], and [x-extra-doc-deps] formulas (intersected
+          with the in-plan name set). Equal to {!deps} for packages that have
+          no doc-only edges. Consumed by the doc DAG; ignored by build /
+          execute. See {!Doc_deps.needs_separate_link}. *)
   layer_hash : string;
       (** Content hash of the package plus its transitive in-plan deps. *)
 }
