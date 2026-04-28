@@ -175,6 +175,10 @@ let run ~proc_mgr ~fs ~d10 ?toolchain ~dune_cache_root ~bin_paths
       ; "--actions"; actions_for_kind node.kind
       ; "--odoc"; bin_paths.odoc
       ; "--odoc-md"; bin_paths.odoc_md
+      ; "--blessed"
+        (* Every package in oi's single-solution model is treated as
+           blessed: HTML lands at [p/<pkg>/<ver>/...] in the layer
+           rather than the universe-keyed [u/<universe>/...]. *)
       ; "-v"
       ]
     in

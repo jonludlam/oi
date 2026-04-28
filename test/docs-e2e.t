@@ -36,7 +36,8 @@ The assemble step writes to _oi/docs/.
 Real odoc HTML output:
 
   $ test -f _oi/docs/odoc_docs/odoc.css
-  $ find _oi/docs/odoc_docs/u -name 'index.html' | grep -q 'csexp/.*/doc/index.html'
+  $ test -f _oi/docs/odoc_docs/p/csexp/1.5.2/doc/index.html
+  $ ! test -d _oi/docs/odoc_docs/u
 
 odoc_driver_voodoo's intermediate dirs (.odoc/.odocl) and our
 prep / cwd dirs are kept OUT of the captured doc layer.
