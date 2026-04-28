@@ -166,6 +166,7 @@ let () =
         Oi_cmd.Search.cmd;
         Oi_cmd.Show.cmd;
         Oi_cmd.Sync.cmd;
+        Oi_cmd.Docs.cmd;
         Oi_cmd.Env.cmd;
         Oi_cmd.Config.cmd;
         Oi_cmd.Registry.cmd;
