@@ -21,6 +21,26 @@ let actions_for_kind : Doc_plan.kind -> string = function
 (* Spawn the doc tool, capture stdout+stderr, raise on non-zero exit.
    Mirrors the pattern in [Execute.run_cmd] but inlined so [Doc_build]
    doesn't depend on Execute internals. *)
+(* On failure, dump the full env + captured output to a debug file
+   under [/tmp/oi-doc-debug/<pkg>-<pid>.log]. odoc_driver_voodoo can
+   exit with code 1 silently when its env is wrong; without this dump
+   the only signal upstream is "exited with code 1" with no body. *)
+let dump_failure_log ~pkg ~cmd_s ~env ~output =
+  let dir = "/tmp/oi-doc-debug" in
+  (try Unix.mkdir dir 0o755 with Unix.Unix_error (EEXIST, _, _) -> ());
+  let path = Filename.concat dir
+    (Printf.sprintf "%s-%d.log"
+       (String.map (fun c -> if c = '/' then '_' else c) pkg)
+       (Unix.getpid ())) in
+  let oc = open_out path in
+  Printf.fprintf oc "CMD: %s\n\n" cmd_s;
+  Printf.fprintf oc "ENV:\n";
+  Array.iter (fun e -> Printf.fprintf oc "  %s\n" e) env;
+  Printf.fprintf oc "\nOUTPUT (%d bytes):\n%s\n"
+    (String.length output) output;
+  close_out oc;
+  path
+
 let spawn_and_capture ~proc_mgr ~fs ~env ~cwd ~pkg cmd =
   let cmd_s = String.concat " " cmd in
   Log.debug (fun m -> m "doc_build %s: + %s" pkg cmd_s);
@@ -40,11 +60,15 @@ let spawn_and_capture ~proc_mgr ~fs ~env ~cwd ~pkg cmd =
   match Eio.Process.await child with
   | `Exited 0 -> ()
   | `Exited n ->
+    let path = dump_failure_log ~pkg ~cmd_s ~env ~output in
     Error.build_failed ~pkg ~cmd:cmd_s
-      ~output:(Fmt.str "exited with code %d\n\n%s" n output)
+      ~output:(Fmt.str "exited with code %d (full env+output: %s)\n\n%s"
+                 n path output)
   | `Signaled n ->
+    let path = dump_failure_log ~pkg ~cmd_s ~env ~output in
     Error.build_failed ~pkg ~cmd:cmd_s
-      ~output:(Fmt.str "killed by signal %d\n\n%s" n output)
+      ~output:(Fmt.str "killed by signal %d (full env+output: %s)\n\n%s"
+                 n path output)
 
 let run ~proc_mgr ~fs ~d10 ~env ~bin_paths
     ~driver_layer_hashes ~odoc_layer_hashes
