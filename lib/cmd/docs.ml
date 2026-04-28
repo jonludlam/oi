@@ -43,7 +43,7 @@ let hardcoded_bin_paths ~cwd : Oi.Doc_build.bin_paths =
    empty lists the cascade-skip in Doc_execute will only fire on the
    project's own build/doc deps, which is exactly what we want for a
    first end-to-end test. *)
-let placeholder_tool_hash = "manual-bin-paths-v6-project-odoc"
+let placeholder_tool_hash = "manual-bin-paths-v10-skip-sublibs"
 
 let do_docs ?refresh ~proc_mgr ~fs ~clock ~sys ~platform ~os_key ~cache
     ~data_dir ~cwd () =

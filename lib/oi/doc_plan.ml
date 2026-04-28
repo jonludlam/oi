@@ -30,7 +30,14 @@ let hash_of_strings parts =
    weeds them out at dispatch time, after their build layer is on disk. *)
 let compiler_names =
   List.map OpamPackage.Name.of_string
-    [ "ocaml-base-compiler"; "ocaml-variants"; "ocaml-system" ]
+    [ (* Wrappers — present in many solutions, install nothing of
+         substance (Doc_build's empty-libs short-circuit handles them). *)
+      "ocaml-base-compiler"; "ocaml-variants"; "ocaml-system"
+      (* Real compilers — install [lib/ocaml/stdlib*.cmti] so
+         downstream [Stdlib.*] xrefs resolve. Same list day11
+         consults (with [relocatable-compiler] added for oi's
+         default toolchain). *)
+    ; "ocaml-compiler"; "oxcaml-compiler"; "relocatable-compiler" ]
 
 let is_compiler_pkg pkg =
   List.exists
