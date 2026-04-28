@@ -102,9 +102,51 @@ let run ~proc_mgr ~fs ~d10 ?toolchain ~dune_cache_root ~bin_paths
     let pkg_str = OpamPackage.to_string node.pkg in
     let pkg_name = OpamPackage.Name.to_string (OpamPackage.name node.pkg) in
     let _pkg_ver = OpamPackage.Version.to_string (OpamPackage.version node.pkg) in
+    (* Build the [prep/] tree odoc_driver_voodoo hardcodes. The
+       wrapper opens [./prep] from cwd and walks
+       [prep/universes/<u>/<pkg>/<ver>/lib/...] for inputs; without
+       that tree it exit_group(1)s silently. We construct the tree as
+       symlinks back into the assembled prefix's [lib/<pkg>/] so no
+       file copies are needed. The universe is per-package — same
+       recipe day11 uses (hash of the build hash). *)
+    let universe =
+      Digest.string node.build_hash |> Digest.to_hex
+      |> fun s -> String.sub s 0 12
+    in
+    (* Build cwd / prep tree OUTSIDE the assembled prefix so that
+       [D10.Prefix.diff] doesn't capture them as part of the doc
+       layer. Same for the [.odoc] / [.odocl] intermediates: keep
+       them out of [<prefix>/odoc_docs/] so the captured layer is
+       just the user-visible HTML.
+
+       Cleaned up at end of run. *)
+    let tmp_root = Filename.temp_dir "oi_doc_" "" in
+    let prep_root = Filename.concat tmp_root "prep" in
+    let installed_libs = Doc_prep.scan_libs ~prefix ~pkg:node.pkg in
+    let installed_docs = Doc_prep.scan_docs ~prefix ~pkg:node.pkg in
+    if installed_libs = [] then begin
+      (* No findlib libs in [<prefix>/lib/<pkg>/] — likely the OCaml
+         compiler itself or a CLI-only package. Same short-circuit
+         day11's [prepare] does. We still record an empty layer so
+         the cache key resolves and downstream cascade-skip works. *)
+      Log.info (fun m -> m "doc-skip %s: no documentable libraries"
+        (OpamPackage.to_string node.pkg));
+      D10.Layer.store d10
+        ~hash:node.hash
+        ~prefix
+        ~files:[]
+        ~package:(OpamPackage.to_string node.pkg)
+        ~deps:[]
+        ~parent_hashes:layer_hashes
+        ~exit_status:0
+        ()
+    end
+    else begin
+    Doc_prep.create ~prefix ~prep_root ~pkg:node.pkg ~universe
+      ~installed_libs ~installed_docs;
     let html_dir = Filename.concat prefix "odoc_docs" in
-    let odoc_dir = Filename.concat prefix "odoc_docs/.odoc" in
-    let odocl_dir = Filename.concat prefix "odoc_docs/.odocl" in
+    let odoc_dir = Filename.concat tmp_root "odoc" in
+    let odocl_dir = Filename.concat tmp_root "odocl" in
     (* Pre-create the output dirs so the tool can find/create per-package
        subtrees beneath them. odoc_driver_voodoo treats [--odoc-dir] as
        required; placing it under [odoc_docs/] means the intermediate
@@ -136,15 +178,18 @@ let run ~proc_mgr ~fs ~d10 ?toolchain ~dune_cache_root ~bin_paths
       ; "-v"
       ]
     in
-    (* Use [/tmp] as cwd, NOT [prefix]. odoc_driver_voodoo trips
-       (silent exit 1) when its cwd is the assembled prefix and the
-       env is the trimmed switch env from [Solver.Env.make_env];
-       reproducible standalone. The tool only consults
-       [OPAM_SWITCH_PREFIX] for the switch contents, so cwd doesn't
-       need to be under it. *)
-    let neutral_cwd = Filename.get_temp_dir_name () in
-    spawn_and_capture ~proc_mgr ~fs ~env ~cwd:neutral_cwd
-      ~pkg:pkg_str cmd;
+    (* cwd at [<tmp_root>/] — odoc_driver_voodoo opens [./prep]
+       relative to cwd and finds the symlink tree we just built. *)
+    let finally () =
+      try
+        let _ = Sys.command
+          (Printf.sprintf "rm -rf %s" (Filename.quote tmp_root)) in
+        ()
+      with _ -> ()
+    in
+    Fun.protect ~finally (fun () ->
+      spawn_and_capture ~proc_mgr ~fs ~env ~cwd:tmp_root
+        ~pkg:pkg_str cmd);
     let files = D10.Prefix.diff ~fs ~prefix ~before |> List.map fst in
     let parent_hashes = layer_hashes in
     D10.Layer.store d10
@@ -156,4 +201,5 @@ let run ~proc_mgr ~fs ~d10 ?toolchain ~dune_cache_root ~bin_paths
       ~parent_hashes
       ~exit_status:0
       ()
+    end
   end
