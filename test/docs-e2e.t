@@ -27,8 +27,20 @@ Doc_execute.run (per-node Doc_build), Doc_assemble.assemble.
 
   $ oi docs 2>&1 | grep -q "^Building project deps"
   $ oi docs 2>&1 | grep -q "^Doc DAG: [0-9]"
+  $ oi docs 2>&1 | grep -q "^Assembled to "
 
 The assemble step writes to _oi/docs/.
 
-  $ oi docs 2>&1 | grep -q "^Assembled to "
-  $ test -d _oi/docs
+  $ test -d _oi/docs/odoc_docs
+
+Real odoc HTML output:
+
+  $ test -f _oi/docs/odoc_docs/odoc.css
+  $ find _oi/docs/odoc_docs/u -name 'index.html' | grep -q 'csexp/.*/doc/index.html'
+
+odoc_driver_voodoo's intermediate dirs (.odoc/.odocl) and our
+prep / cwd dirs are kept OUT of the captured doc layer.
+
+  $ ! test -d _oi/docs/_oi-cwd
+  $ ! test -d _oi/docs/odoc_docs/.odoc
+  $ ! test -d _oi/docs/odoc_docs/.odocl
