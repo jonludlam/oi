@@ -74,14 +74,24 @@ let run ~proc_mgr ~fs ~d10 ~env ~bin_paths
     let pkg_name = OpamPackage.Name.to_string (OpamPackage.name node.pkg) in
     let _pkg_ver = OpamPackage.Version.to_string (OpamPackage.version node.pkg) in
     let html_dir = Filename.concat prefix "odoc_docs" in
-    (* Pre-create [odoc_docs] so the doc tool can find/create per-package
-       subtrees beneath it. *)
-    (try Unix.mkdir html_dir 0o755 with Unix.Unix_error (EEXIST, _, _) -> ());
+    let odoc_dir = Filename.concat prefix "odoc_docs/.odoc" in
+    let odocl_dir = Filename.concat prefix "odoc_docs/.odocl" in
+    (* Pre-create the output dirs so the tool can find/create per-package
+       subtrees beneath them. odoc_driver_voodoo treats [--odoc-dir] as
+       required; placing it under [odoc_docs/] means the intermediate
+       [.odoc] / [.odocl] files become part of the captured layer. *)
+    List.iter
+      (fun d ->
+        try Unix.mkdir d 0o755
+        with Unix.Unix_error (EEXIST, _, _) -> ())
+      [ html_dir; odoc_dir; odocl_dir ];
     let before = D10.Prefix.snapshot ~fs prefix in
     let cmd =
       [ bin_paths.odoc_driver_voodoo
       ; pkg_name
       ; "--html-dir"; html_dir
+      ; "--odoc-dir"; odoc_dir
+      ; "--odocl-dir"; odocl_dir
       ; "--actions"; actions_for_kind node.kind
       ; "--odoc"; bin_paths.odoc
       ; "--odoc-md"; bin_paths.odoc_md
