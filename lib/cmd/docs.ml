@@ -10,25 +10,40 @@ module Log = (val Logs.src_log log_src : Logs.LOG)
 
 let ( / ) = Filename.concat
 
-(* v1: hardcoded paths to the locally-installed odoc-driver toolchain.
+(* v1: hardcoded paths to a locally-installed odoc-driver toolchain.
    [Doc_tools.resolve] will replace this with a proper two-compiler
-   solve+build (driver compiler for [odoc-driver], project compiler
-   for [odoc]) — see TODO at the bottom. *)
-let hardcoded_bin_paths : Oi.Doc_build.bin_paths =
+   solve+build later.
+
+   Driver tools (odoc-driver-voodoo, odoc-md, sherlodoc) come from the
+   user's global opam switch — they need eio, so a modern compiler,
+   any modern compiler.
+
+   [odoc] itself MUST match the project's compiler — it parses the
+   project's [.cmti] / [.cmt] files, and a 5.3 odoc can't read 5.4
+   binaries (different magic numbers per major OCaml version). [oi
+   sync] already builds a project-compiler-matched odoc into
+   [<cwd>/_oi/tools/bin/odoc] as part of its toolchain-tools step;
+   we point at that. *)
+let hardcoded_bin_paths ~cwd : Oi.Doc_build.bin_paths =
   let home = try Unix.getenv "HOME" with Not_found -> "/home/jjl25" in
-  let bin n = home / ".opam" / "default" / "bin" / n in
+  let opam_bin n = home / ".opam" / "default" / "bin" / n in
+  let project_odoc = cwd / "_oi" / "tools" / "bin" / "odoc" in
+  let odoc =
+    if Sys.file_exists project_odoc then project_odoc
+    else opam_bin "odoc"
+  in
   {
-    odoc = bin "odoc";
-    odoc_md = bin "odoc-md";
-    odoc_driver_voodoo = bin "odoc_driver_voodoo";
-    sherlodoc = bin "sherlodoc";
+    odoc;
+    odoc_md = opam_bin "odoc-md";
+    odoc_driver_voodoo = opam_bin "odoc_driver_voodoo";
+    sherlodoc = opam_bin "sherlodoc";
   }
 
 (* Placeholder until Doc_tools resolves the actual layer set. With
    empty lists the cascade-skip in Doc_execute will only fire on the
    project's own build/doc deps, which is exactly what we want for a
    first end-to-end test. *)
-let placeholder_tool_hash = "manual-bin-paths-v3-blessed"
+let placeholder_tool_hash = "manual-bin-paths-v6-project-odoc"
 
 let do_docs ?refresh ~proc_mgr ~fs ~clock ~sys ~platform ~os_key ~cache
     ~data_dir ~cwd () =
@@ -96,10 +111,12 @@ let do_docs ?refresh ~proc_mgr ~fs ~clock ~sys ~platform ~os_key ~cache
   end
   else begin
     let dune_cache_root = data_dir / "dune-cache" in
+    let bin_paths = hardcoded_bin_paths ~cwd in
+    Fmt.pr "Using odoc: %s@." bin_paths.odoc;
     let outcomes =
       Oi.Doc_execute.run ~proc_mgr ~fs ~d10 ?toolchain:tc_ctx
         ~dune_cache_root
-        ~bin_paths:hardcoded_bin_paths
+        ~bin_paths
         ~context_layers:project_layer_hashes
         ~driver_layer_hashes:[] ~odoc_layer_hashes:[]
         doc_plan
